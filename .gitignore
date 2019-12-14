@@ -1,0 +1,4 @@
+*/build/*
+*.mnlgxdunit
+*.ntkdigunit
+tools/*
