@@ -24,7 +24,7 @@ typedef struct {
     SQ15_16 current;
     SQ15_16 sampling;
     SQ7_24 step;
-    int32_t delaySize;
+    uint32_t delayOffset; // u24.8
 } LCWDelayBlock;
 
 static SQ7_24 delayInputArray[LCW_DELAY_INPUT_SIZE];
@@ -43,20 +43,17 @@ static LCWDelayBuffer delaySamplingBuffer = {
 };
 
 // memo: バッファサイズのみ変更するBPM同期ディレイなので step = 1.0 で固定
-static const SQ7_24 delayStep = LCW_SQ7_24( 1.f );
+static const SQ7_24 delayStep = LCW_SQ7_24( 1.0 );
 
-static SQ7_24 delaySizeLpfParam = LCW_SQ7_24( 0.9999f );
+static SQ7_24 delaySizeLpfParam = LCW_SQ7_24( 0.99979 );
 static uint32_t delaySize = LCW_DELAY_SAMPLING_RATE;
 
 static LCWDelayBlock delayBlock;
 
 static SQ7_24 resampling(const LCWDelayBuffer *p, int32_t i, const SQ3_12 *fir, int32_t n)
 {
-    // memo:
-    // step = 1.0 固定なので、delaySizeに端数を設けない限りは補間処理不要
-
     const uint32_t mask = p->mask;
-#if (0)
+#if (1)
     int64_t ret = 0;
     for (int32_t j=0; j<n; j++) {
         ret += ( (int64_t)(p->buffer[(i + j) & mask]) * fir[j] );
@@ -68,20 +65,20 @@ static SQ7_24 resampling(const LCWDelayBuffer *p, int32_t i, const SQ3_12 *fir, 
 #endif
 }
 
-static void convergeDelaySize(LCWDelayBlock *block, uint32_t dst, SQ7_24 param)
+static void convergeDelayOffset(LCWDelayBlock *block, uint32_t dst, SQ7_24 param)
 {
-    const uint32_t src = block->delaySize;
+    const uint32_t src = block->delayOffset;
     if ( src < dst ) {
         const uint32_t diff = dst - src;
         const uint32_t tmp = (uint32_t)( ((uint64_t)diff * param) >> 24 );
         
-        block->delaySize = dst - tmp;
+        block->delayOffset = dst - tmp;
     }
     else {
         const uint32_t diff = src - dst;
         const uint32_t tmp = (uint32_t)( ((uint64_t)diff * param) >> 24 );
         
-        block->delaySize = dst + tmp;
+        block->delayOffset = dst + tmp;
     }
 }
 
@@ -106,7 +103,7 @@ void LCWDelayReset(void)
     delayBlock.current = LCW_SQ15_16( LCW_DELAY_FIR_TAP + 1 );
     delayBlock.sampling = LCW_SQ15_16( LCW_DELAY_FIR_TAP + 1 );
     delayBlock.step = delayStep;
-    delayBlock.delaySize = delaySize;
+    delayBlock.delayOffset = delaySize << 8;
 }
 
 void LCWDelayUpdate(const uint32_t delaySamples)
@@ -123,7 +120,7 @@ void LCWDelayInput(int32_t fxSend)
     delayBlock.current += LCW_SQ15_16( 1.0 );
 
     if ( delayBlock.sampling <= delayBlock.current ) {
-        convergeDelaySize( &delayBlock, delaySize, delaySizeLpfParam );
+        convergeDelayOffset( &delayBlock, (delaySize << 8), delaySizeLpfParam );
     }
 
     const SQ15_16 step = (SQ15_16)( delayBlock.step >> 8 );
@@ -131,9 +128,12 @@ void LCWDelayInput(int32_t fxSend)
 
         // pos = current - fir_tap
         const int32_t i = delayInputBuffer.pointer - LCW_DELAY_FIR_TAP + (int32_t)(delayBlock.current >> 16);
-
+#if(0)
         const SQ3_12 *fir = gLcwDelayFirTable[ (delayBlock.current >> (16 - LCW_DELAY_FIR_TABLE_BITS)) & LCW_DELAY_FIR_TABLE_MASK ];
         const SQ7_24 sample = resampling( &delayInputBuffer, i, fir, LCW_DELAY_FIR_TAP );
+#else
+        const SQ7_24 sample = delayInputBuffer.buffer[(i + (LCW_DELAY_FIR_TAP >> 1)) & delayInputBuffer.mask];
+#endif
 
         delaySamplingBuffer.pointer = LCW_DELAY_BUFFER_DEC(delaySamplingBuffer);
         delaySamplingBuffer.buffer[delaySamplingBuffer.pointer] = sample;
@@ -145,11 +145,15 @@ int32_t LCWDelayOutput(void)
 {
     // memo:
     // currentがsamplingを超えないことを想定している
-    const SQ15_16 tmp = delayBlock.sampling - delayBlock.current;
-    const SQ15_16 offset = ((tmp << 8) / (delayBlock.step >> 12)) << 4;
+    const UQ16_16 tmp = delayBlock.sampling - delayBlock.current;
+
+    // u16.16 -> u24.8
+    uint32_t offset = (tmp << 8) / (delayBlock.step >> (24 - 16));
+    offset += delayBlock.delayOffset;
+
     const LCWDelayBuffer *p = &delaySamplingBuffer;
-    const int32_t i = p->pointer + delayBlock.delaySize - (LCW_DELAY_FIR_TAP >> 1) + (int32_t)(offset >> 16);
-    const SQ3_12 *fir = gLcwDelayFirTable[ (offset >> (16 - LCW_DELAY_FIR_TABLE_BITS)) & LCW_DELAY_FIR_TABLE_MASK ];
+    const int32_t i = p->pointer - (LCW_DELAY_FIR_TAP >> 1) + (int32_t)(offset >> 8);
+    const SQ3_12 *fir = gLcwDelayFirTable[ (offset >> (8 - LCW_DELAY_FIR_TABLE_BITS)) & LCW_DELAY_FIR_TABLE_MASK ];
 
     return resampling( p, i, fir, LCW_DELAY_FIR_TAP );
 }
