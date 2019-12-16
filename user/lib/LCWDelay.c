@@ -13,6 +13,9 @@ This software is released under the MIT License, see LICENSE.txt.
 
 #define LCW_DELAY_BUFFER_DEC(buf) (((buf).pointer - 1) & (buf).mask)
 
+// 入力バッファにおけるサンプリング位置（固定）
+#define LCW_DELAY_SAMPLING_POS (1 + LCW_DELAY_FIR_TAP)
+
 typedef struct {
     SQ7_24 *buffer;
     uint32_t size;
@@ -100,17 +103,18 @@ void LCWDelayReset(void)
         delaySamplingBuffer.buffer[i] = 0;
     }
 */
-    delayBlock.current = LCW_SQ15_16( LCW_DELAY_FIR_TAP + 1 );
-    delayBlock.sampling = LCW_SQ15_16( LCW_DELAY_FIR_TAP + 1 );
+    delayBlock.current = LCW_SQ15_16( LCW_DELAY_SAMPLING_POS );
+    delayBlock.sampling = LCW_SQ15_16( LCW_DELAY_SAMPLING_POS );
     delayBlock.step = delayStep;
     delayBlock.delayOffset = delaySize << 8;
 }
 
 void LCWDelayUpdate(const uint32_t delaySamples)
 {
-    // step = 1.0 固定
-    uint32_t offset = (uint32_t)(delayBlock.sampling >> 16) >> 1;
-    delaySize = delaySamples - offset;
+    // Inputのあと、次のフレームでOutputが呼ばれるので、
+    // 入力バッファにて、サンプリング位置 x 1/SamplingRate だけ時間が経過している
+    // step = 1.0 固定なので、残りがサンプリングバッファにおける遅れ量
+    delaySize = delaySamples - LCW_DELAY_SAMPLING_POS;
 }
 
 void LCWDelayInput(int32_t fxSend)
@@ -125,9 +129,7 @@ void LCWDelayInput(int32_t fxSend)
 
     const SQ15_16 step = (SQ15_16)( delayBlock.step >> 8 );
     while ( delayBlock.sampling <= delayBlock.current ) {
-
-        // pos = current - fir_tap
-        const int32_t i = delayInputBuffer.pointer - LCW_DELAY_FIR_TAP + (int32_t)(delayBlock.current >> 16);
+        const int32_t i = delayInputBuffer.pointer - (LCW_DELAY_FIR_TAP >> 1) + (int32_t)(delayBlock.current >> 16);
 #if(0)
         const SQ3_12 *fir = gLcwDelayFirTable[ (delayBlock.current >> (16 - LCW_DELAY_FIR_TABLE_BITS)) & LCW_DELAY_FIR_TABLE_MASK ];
         const SQ7_24 sample = resampling( &delayInputBuffer, i, fir, LCW_DELAY_FIR_TAP );

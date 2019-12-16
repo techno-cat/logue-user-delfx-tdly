@@ -16,17 +16,17 @@ static float s_depth;
 static uint32_t s_time;
 
 static const float delayTimeParams[LCW_DELAY_TIME_PARAMS] = {
-    1.f/16, //  1/16
-    .5f/3 , //
-    3.f/16, //  3/16
+    1.f/8,  // 0.125
+    .5f/3 , // 0.1666
+    3.f/16, // 0.1875
     // ---------------
-    2.f/8 , //  2/8
-    1.f/3 , //
-    3.f/8 , //  3/8
+    1.f/4 , // 0.25
+    1.f/3 , // 0.3333
+    3.f/8 , // 0.375
     // ---------------
-    2.f/4 , //  2/4
-    2.f/3 , //
-    3.f/4 , //  3/4
+    1.f/2 , // 0.5
+    2.f/3 , // 0.6666
+    3.f/4 , // 0.75
     // ---------------
     1.f
 };
@@ -62,7 +62,7 @@ void DELFX_PROCESS(float *xn, uint32_t frames)
   // todo: L/Rで分ける
   for (; x != x_e; ) {
     float xL = *x;
-    //float xR = dry * (*x);
+    //float xR = dry * (*(x+1));
     float wL = LCWDelayOutput() / (float)(1 << 24);
 
     float fbL = wL * s_depth;
