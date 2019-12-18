@@ -9,8 +9,8 @@ This software is released under the MIT License, see LICENSE.txt.
 #define LCW_DELAY_TIME_PARAMS (10)
 #define LCW_DELAY_FB_GAIN_TABLE_SIZE (64 + 1)
 
-static __sdram int32_t s_delay_ram[LCW_DELAY_SAMPLING_SIZE];
-static const float s_fs_recip = 1.f / 48000.f;
+static __sdram int32_t s_delay_ram_input[LCW_DELAY_INPUT_SIZE];
+static __sdram int32_t s_delay_ram_sampling[LCW_DELAY_SAMPLING_SIZE];
 
 static float s_mix;
 static float s_depth;
@@ -133,7 +133,12 @@ __fast_inline float softlimiter(float c, float x)
 
 void DELFX_INIT(uint32_t platform, uint32_t api)
 {
-  LCWDelayInit( s_delay_ram );
+  const LCWDelayNeededBuffer buffer = {
+    s_delay_ram_input,
+    s_delay_ram_sampling
+  };
+  
+  LCWDelayInit( &buffer );
   LCWDelayReset();
 
   s_mix = 0.5f;
@@ -158,13 +163,10 @@ void DELFX_PROCESS(float *xn, uint32_t frames)
 
   const float dry = 1.f - s_mix;
   const float wet = s_mix;
-  
   const float fb = lookUpFbGain( s_depth );
 
-  // todo: L/Rで分ける
   for (; x != x_e; ) {
     float xL = *x;
-    //float xR = dry * (*(x+1));
     float wL = LCWDelayOutput() / (float)(1 << 24);
     wL = softlimiter( 0.1f, wL ); // -> -1.0 .. +1.0
 

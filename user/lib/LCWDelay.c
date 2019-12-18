@@ -7,10 +7,6 @@ This software is released under the MIT License, see LICENSE.txt.
 #include "LCWCommon.h"
 #include "LCWDelayFirParamTable.h"
 
-#define LCW_DELAY_INPUT_BITS (5)
-#define LCW_DELAY_INPUT_SIZE (1 << LCW_DELAY_INPUT_BITS)
-#define LCW_DELAY_INPUT_MASK (LCW_DELAY_INPUT_SIZE - 1)
-
 #define LCW_DELAY_BUFFER_DEC(buf) (((buf).pointer - 1) & (buf).mask)
 
 // 入力バッファにおけるサンプリング位置（固定）
@@ -30,10 +26,8 @@ typedef struct {
     uint32_t delayOffset; // u24.8
 } LCWDelayBlock;
 
-static SQ7_24 delayInputArray[LCW_DELAY_INPUT_SIZE];
-
 static LCWDelayBuffer delayInputBuffer = {
-    delayInputArray,
+    (SQ7_24 *)0,
     LCW_DELAY_INPUT_SIZE,
     LCW_DELAY_INPUT_MASK,
     0
@@ -85,9 +79,10 @@ static void convergeDelayOffset(LCWDelayBlock *block, uint32_t dst, SQ7_24 param
     }
 }
 
-void LCWDelayInit(int32_t *delayBuffer)
+void LCWDelayInit(const LCWDelayNeededBuffer *buffer)
 {
-    delaySamplingBuffer.buffer = delayBuffer;
+    delayInputBuffer.buffer = (SQ7_24 *)buffer->input;
+    delaySamplingBuffer.buffer = (SQ7_24 *)buffer->sampling;
 }
 
 void LCWDelayReset(void)
