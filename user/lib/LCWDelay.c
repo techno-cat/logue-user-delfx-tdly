@@ -124,12 +124,13 @@ void LCWDelayInput(int32_t fxSend)
 
     const SQ15_16 step = (SQ15_16)( delayBlock.step >> 8 );
     while ( delayBlock.sampling <= delayBlock.current ) {
-        const int32_t i = delayInputBuffer.pointer - (LCW_DELAY_FIR_TAP >> 1) + (int32_t)(delayBlock.current >> 16);
 #if(0)
+        const int32_t i = delayInputBuffer.pointer - (LCW_DELAY_FIR_TAP >> 1) + (int32_t)(delayBlock.current >> 16);
         const SQ3_12 *fir = gLcwDelayFirTable[ (delayBlock.current >> (16 - LCW_DELAY_FIR_TABLE_BITS)) & LCW_DELAY_FIR_TABLE_MASK ];
         const SQ7_24 sample = resampling( &delayInputBuffer, i, fir, LCW_DELAY_FIR_TAP );
 #else
-        const SQ7_24 sample = delayInputBuffer.buffer[(i + (LCW_DELAY_FIR_TAP >> 1)) & delayInputBuffer.mask];
+        const int32_t i = delayInputBuffer.pointer + (int32_t)(delayBlock.current >> 16);
+        const SQ7_24 sample = delayInputBuffer.buffer[i & delayInputBuffer.mask];
 #endif
 
         delaySamplingBuffer.pointer = LCW_DELAY_BUFFER_DEC(delaySamplingBuffer);
