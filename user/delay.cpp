@@ -4,6 +4,7 @@ This software is released under the MIT License, see LICENSE.txt.
 //*/
 
 #include "userdelfx.h"
+#include "buffer_ops.h"
 #include "LCWDelay.h"
 
 #define LCW_DELAY_TIME_PARAMS (10)
@@ -12,6 +13,7 @@ This software is released under the MIT License, see LICENSE.txt.
 static __sdram int32_t s_delay_ram_input[LCW_DELAY_INPUT_SIZE];
 static __sdram int32_t s_delay_ram_sampling[LCW_DELAY_SAMPLING_SIZE];
 
+static float s_inputGain;
 static float s_mix;
 static float s_depth;
 static uint32_t s_time;
@@ -144,6 +146,7 @@ void DELFX_INIT(uint32_t platform, uint32_t api)
   s_mix = 0.5f;
   s_depth = 0.f;
   s_time = 0;
+  s_inputGain = 0.f;
 }
 
 void DELFX_PROCESS(float *xn, uint32_t frames)
@@ -170,14 +173,30 @@ void DELFX_PROCESS(float *xn, uint32_t frames)
     float wL = LCWDelayOutput() / (float)(1 << 24);
     wL = softlimiter( 0.1f, wL ); // -> -1.0 .. +1.0
 
-    float fbL = wL * fb;
-    LCWDelayInput( (int32_t)((xL - fbL) * (1 << 24)) );
+    float inL = (xL * s_inputGain) - (wL * fb);
+    LCWDelayInput( (int32_t)(inL * (1 << 24)) );
 
     float yL = (dry * xL) + (wet * wL);
 
     *(x++) = yL;
     *(x++) = yL;
+
+    if ( s_inputGain < 0.99998f ) {
+      s_inputGain += ( (1.f - s_inputGain) * 0.0625f );
+    }
+    else { s_inputGain = 1.f; }
   }
+}
+
+void DELFX_RESUME(void)
+{
+  buf_clr_u32(
+    (uint32_t * __restrict__)s_delay_ram_input,
+    LCW_DELAY_INPUT_SIZE );
+  buf_clr_u32(
+    (uint32_t * __restrict__)s_delay_ram_sampling,
+    LCW_DELAY_SAMPLING_SIZE );
+  s_inputGain = 0.f;
 }
 
 void DELFX_PARAM(uint8_t index, int32_t value)
