@@ -33,7 +33,7 @@ typedef struct {
 
 extern void LCWDelayInit(const LCWDelayNeededBuffer *buffer);
 extern void LCWDelayReset(void);
-extern void LCWDelayUpdate(const uint32_t delaySamples);
+extern void LCWDelayUpdate(uint32_t delaySamples);
 extern void LCWDelayInput(int32_t fxSend);
 extern int32_t LCWDelayOutput(void);
 

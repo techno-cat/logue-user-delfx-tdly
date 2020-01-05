@@ -104,7 +104,7 @@ void LCWDelayReset(void)
     delayBlock.delayOffset = delaySize << 8;
 }
 
-void LCWDelayUpdate(const uint32_t delaySamples)
+void LCWDelayUpdate(uint32_t delaySamples)
 {
     // Inputのあと、次のフレームでOutputが呼ばれるので、
     // 入力バッファにて、サンプリング位置 x 1/SamplingRate だけ時間が経過している
